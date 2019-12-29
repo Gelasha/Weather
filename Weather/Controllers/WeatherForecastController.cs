@@ -5,8 +5,10 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using AutoMapper;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Weather.Configuration;
 using Weather.Dtos;
 using Weather.Interfaces;
 using Weather.Model;
@@ -17,41 +19,37 @@ namespace Weather.Controllers
     [Route("[controller]")]
     public class WeatherForecastController : ControllerBase
     {
+        private IConfiguration _configuration;
+
         private readonly IMapper _mapper;
 
         private readonly ISearchHistoryRepository _searchHistoryRepository;
 
-        private readonly ILogger<WeatherForecastController> _logger;       
-
-        public WeatherForecastController(IMapper mapper, ILogger<WeatherForecastController> logger, ISearchHistoryRepository searchHistoryRepository)
+        public WeatherForecastController(IMapper mapper, ISearchHistoryRepository searchHistoryRepository, IConfiguration configuration)
         {
-            _mapper = mapper;
-            _logger = logger;
-            _searchHistoryRepository = searchHistoryRepository;
+            _configuration = configuration;
+            _mapper = mapper;            
+            _searchHistoryRepository = searchHistoryRepository;            
         }
 
-        private static readonly string[] Cities = new[]
+        public Config config 
         {
-            "Leipzig", "Berlin", "Munich",  "Leverkusen", "Hamburg"
-        };
+            get
+            {
+                return new Config(_configuration);
+            }
+        }
 
         [HttpGet("[action]")]
         public async Task<IActionResult> Forecast()
-        {
-            using (var client = new HttpClient())
-            {
+        {            
                 try
                 {
-                    var list = new List<Object>();
+                    var list = new List<Object>();                    
 
-                    client.BaseAddress = new Uri("http://api.openweathermap.org");
-
-                    foreach (var City in Cities)
-                    {                      
-                        var response = await client.GetAsync($"/data/2.5/forecast?q={City}&appid=fcadd28326c90c3262054e0e6ca599cd");                        
-                        response.EnsureSuccessStatusCode();
-
-                        var stringResult = await response.Content.ReadAsStringAsync();
+                    foreach (var City in config.Cities)
+                    {
+                        string stringResult = await config.GetDataByCity(City);
                         var rawWeather = JsonConvert.DeserializeObject<DefaultCityWeather>(stringResult);
 
                         var result = from l in rawWeather.list
@@ -69,9 +67,7 @@ namespace Weather.Controllers
                             Fields = result
                         };
 
-                        list.Add(dto);
-
-                        response.Dispose();
+                        list.Add(dto);                        
                     }                    
 
                     return Ok(list);
@@ -80,31 +76,17 @@ namespace Weather.Controllers
                 {
                     return BadRequest($"Error getting weather from OpenWeather: {httpRequestException.Message}");
                 }
-            }
         }
 
         [HttpGet("[action]/{param}")]
         public async Task<IActionResult> Weather(string param)
-        {
-            using (var client = new HttpClient())
-            {
+        {            
                 try
-                {                  
-                    client.BaseAddress = new Uri("http://api.openweathermap.org");
-
+                {                   
                     if (!String.IsNullOrEmpty(param))
                     {
-                        var response = await client.GetAsync($"/data/2.5/weather?zip={param},de&appid=fcadd28326c90c3262054e0e6ca599cd");                        
-
-                        if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                        {
-                            response = await client.GetAsync($"/data/2.5/weather?q={param}&appid=fcadd28326c90c3262054e0e6ca599cd");                            
-                        }                        
-
-                        response.EnsureSuccessStatusCode();
-
-                        var stringResult = await response.Content.ReadAsStringAsync();
-                        var rawWeather = JsonConvert.DeserializeObject<WeatherByCity>(stringResult);
+                    string stringResult = await config.GetDataByZipCodeOrCity(param);
+                    var rawWeather = JsonConvert.DeserializeObject<WeatherByCity>(stringResult);
                                                 
                         var dto = new WeatherByCityDto
                         {
@@ -130,8 +112,7 @@ namespace Weather.Controllers
                 catch (HttpRequestException httpRequestException)
                 {
                     return BadRequest($"Error getting weather from OpenWeather: {httpRequestException.Message}");
-                }
-            }
+                }            
         }
 
         [HttpGet("[action]")]
