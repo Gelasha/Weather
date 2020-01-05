@@ -17,12 +17,16 @@
           <th
             scope="col"
             v-show="showListOfCity"
-            v-for="i in forecast[0].fields"
+            v-for="i in forecast.date"
             v-bind:key="i.id"
-          >{{ i.date }}</th>
+          >{{ i }}</th>
         </thead>
         <tbody>
-          <tr v-show="showListOfCity" v-for="item in forecast" v-bind:key="item.id">
+          <tr
+            v-show="showListOfCity"
+            v-for="item in forecast.basicFieldsByCity"
+            v-bind:key="item.id"
+          >
             <td>{{ item.city }}</td>
             <td v-for="i in item.fields" v-bind:key="i.id">
               <div>Spead: {{ i.averageSpead }}</div>

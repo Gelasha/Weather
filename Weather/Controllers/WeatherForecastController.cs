@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -45,7 +46,7 @@ namespace Weather.Controllers
         {            
                 try
                 {
-                    var list = new List<Object>();                    
+                    var list = new List<BasicFieldsByCity>();                    
 
                     foreach (var City in config.Cities)
                     {
@@ -54,23 +55,34 @@ namespace Weather.Controllers
 
                         var result = from l in rawWeather.list
                                  group l by l.Dt_txt.Substring(0, 10) into tt
-                                 select new Fields
+                                 select new BasicFields
                                  {
-                                     Date = tt.Key,
+                                     DateFromApi = Convert.ToDateTime(tt.Key),
                                      AverageSpead = Math.Round(tt.Average(x => Convert.ToDouble(x.Wind.Speed)),2),                                     
                                      AverageTemp = Math.Round(tt.Average(x => Convert.ToDouble(x.Main.Temp)),2)
                                  };
 
-                        var dto = new DefaultCityWeatherDto
+                        var basicFields = new BasicFieldsByCity
                         {
-                            City = City,
-                            Fields = result
+                            Fields = result.OrderBy(d => d.DateFromApi),
+                            City = City
                         };
 
-                        list.Add(dto);                        
-                    }                    
+                        list.Add(basicFields);                        
+                    }
 
-                    return Ok(list);
+                CultureInfo deC = new CultureInfo("de-De");
+                string[] nextDays = Enumerable.Range(0, 6)
+                                        .Select(i => DateTime.Now.Date.AddDays(i).ToString("d", deC))
+                                        .ToArray();
+
+                var dto = new DefaultCityWeatherDto()
+                {
+                    BasicFieldsByCity = list,
+                    Date = nextDays
+                };
+
+                return Ok(dto);
                 }
                 catch (HttpRequestException httpRequestException)
                 {
